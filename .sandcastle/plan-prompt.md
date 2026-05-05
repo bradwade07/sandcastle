@@ -24,10 +24,10 @@ For each unblocked issue, assign a branch name using the format `sandcastle/issu
 
 # OUTPUT
 
-Output your plan as a JSON object wrapped in `<plan>` tags:
+Output your plan as a JSON object wrapped in `<plan>` tags. **Always output the tags, even if the issues array is empty.**
 
 <plan>
 {"issues": [{"id": "42", "title": "Fix auth bug", "branch": "sandcastle/issue-42-fix-auth-bug"}]}
 </plan>
 
-Include only unblocked issues. If every issue is blocked, include the single highest-priority candidate (the one with the fewest or weakest dependencies).
+Include only unblocked issues. If every issue is blocked, include the single highest-priority candidate (the one with the fewest or weakest dependencies). If there are zero open issues, output an empty issues array: `{"issues": []}`
