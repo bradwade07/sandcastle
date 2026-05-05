@@ -2,68 +2,98 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status
+## Overview
 
-**Repository is currently empty.** This CLAUDE.md is a template. Update as you add code and establish patterns.
+This is a personal fork of [@ai-hero/sandcastle](https://github.com/mattpocock/sandcastle), configured to use Deepseek API instead of OpenAI Codex.
 
-## Development Setup
+Sandcastle orchestrates multi-agent AI workflows in isolated Docker containers:
+- **Phase 1 (Plan):** Analyze issues and build dependency graph
+- **Phase 2 (Execute):** Spawn parallel sandboxes, each runs implementer + reviewer agents
+- **Phase 3 (Merge):** Merge all completed branches into main
 
-To be filled in once project structure is established. Include:
-- How to install dependencies
-- Required environment variables
-- How to run the development server
-- How to run tests (unit and integration)
-- How to run linters and formatters
-- How to build for production
+## Setup
 
-Example structure:
-```bash
-npm install          # Install dependencies
-npm run dev          # Start dev server
-npm test             # Run all tests
-npm run test:watch   # Run tests in watch mode
-npm run lint         # Check code style
-npm run build        # Build for production
-```
+1. **Fill API key:**
+   ```bash
+   cp .sandcastle/.env.example .env
+   # Edit .env and add your DEEPSEEK_API_KEY
+   ```
 
-## Code Architecture
+2. **Run:**
+   ```bash
+   bash run-sandcastle.sh
+   ```
 
-To be documented once the project structure solidifies. Should cover:
-- High-level folder organization (what each top-level directory does)
-- Major architectural patterns (client/server split, state management, API design)
-- Technology stack and why those choices were made
-- How the main workflows connect together
-- Any third-party integrations or external dependencies
+   This script sources `.env` (loads DEEPSEEK_API_KEY into environment) then runs `npx tsx .sandcastle/main.mts`.
 
-## Key Files & Directories
+## Architecture
 
-To be added as the project grows.
+### AgentProvider Interface
 
-## Testing Strategy
+Sandcastle uses an extensible `AgentProvider` interface. Custom providers implement:
+- `buildPrintCommand(prompt)` → returns `{ command, stdin }`
+- `parseStreamLine(line)` → returns `[{ type: "text", text: "..." }]`
+- `env: Record<string, string>` → environment variables passed to subprocess
 
-Document:
-- Test framework and configuration
-- Where tests live (co-located with code, separate directory, etc.)
-- How to run specific test suites
-- Coverage expectations or CI requirements
-- Any special test patterns (fixtures, mocks, test utilities)
+### Deepseek Provider
 
-## Version Control Practices
+`.sandcastle/deepseek-provider.mts` implements the provider for `@sluisr/deepseek-cli`:
+- Reads `process.env.DEEPSEEK_API_KEY` at provider init time
+- Passes it to sandbox via `env` field
+- Deepseek-cli runs headless: `npx @sluisr/deepseek-cli -m deepseek-v3 --approval-mode=yolo -p ""` with prompt on stdin
 
-Include if relevant:
-- Branch naming conventions
-- Commit message conventions beyond defaults
-- PR requirements (required reviews, status checks)
-- Deployment branch strategy
+### Docker Setup
 
-## Important Configuration Files
+`.sandcastle/Dockerfile`:
+- Installs `@sluisr/deepseek-cli` globally
+- Copies `.env` to container so agents can access credentials
+- Sets `entrypoint.sh` to source `.env` at container startup (though Sandcastle may override this)
 
-If the project has notable config files (docker-compose.yml, .env.example, tsconfig.json, etc.), document how they work and what needs to be modified locally.
+### Main Orchestration
 
-## Known Constraints or Tech Debt
+`.sandcastle/main.mts`:
+- Reads issue list, builds dependency graph (planner phase)
+- For each unblocked issue: spawn sandbox → run implementer (100 iterations max) → if commits produced, run reviewer (1 iteration)
+- All issue pipelines run in parallel via `Promise.allSettled()`
+- Merge phase runs sequentially to resolve conflicts
+- Loop repeats up to `MAX_ITERATIONS` times
 
-Note any:
-- Browser/runtime compatibility requirements
-- Performance constraints
-- Security considerations specific to this project
-- Deprecated patterns to avoid
+## Prompts
+
+- `.sandcastle/plan-prompt.md`: Planner reads open issues, outputs `<plan>` JSON
+- `.sandcastle/implement-prompt.md`: Implementer solves the issue
+- `.sandcastle/review-prompt.md`: Reviewer audits commits
+- `.sandcastle/merge-prompt.md`: Merger integrates branches and closes issues
+
+## Key Files
+
+| File | Purpose |
+|---|---|
+| `.sandcastle/main.mts` | Main orchestration loop |
+| `.sandcastle/deepseek-provider.mts` | Deepseek CLI integration |
+| `.sandcastle/Dockerfile` | Container setup |
+| `.sandcastle/entrypoint.sh` | Container init (sources .env) |
+| `.env` | API credentials (git-ignored) |
+| `.sandcastle/.env.example` | Template for .env |
+| `run-sandcastle.sh` | Launch script (sources .env, runs main.mts) |
+
+## Development
+
+### Debugging
+
+- Deepseek-cli must have valid `DEEPSEEK_API_KEY` in environment before it runs
+- Verify: `docker run --rm --entrypoint bash -e DEEPSEEK_API_KEY=... sandcastle-test -c 'npx @sluisr/deepseek-cli -p "" <<< "test"'`
+- Check Sandcastle config in `main.mts`: adjust `MAX_ITERATIONS`, `maxIterations` per agent, `hooks`, `copyToWorktree`
+
+### Common Changes
+
+- **Change model:** Edit `deepseek("deepseek-v3")` calls in main.mts to use different model
+- **Change iteration limits:** Adjust `MAX_ITERATIONS` (outer loop) or per-agent `maxIterations` in `sandbox.run()`
+- **Adjust prompts:** Edit `.sandcastle/*.md` files; use `{{PLACEHOLDER}}` for dynamic values injected via `promptArgs`
+
+## Running Tests
+
+Sandcastle doesn't have unit tests — it's designed to be run end-to-end. Test by:
+1. Create a test issue in your repo
+2. Run `bash run-sandcastle.sh`
+3. Watch logs; check if planner generates a plan, implementer makes commits, reviewer audits, merger integrates
