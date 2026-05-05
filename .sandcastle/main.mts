@@ -21,6 +21,23 @@
 // Or add to package.json:
 //   "scripts": { "sandcastle": "npx tsx .sandcastle/main.mts" }
 
+import * as fs from "fs";
+import * as path from "path";
+
+// Load .env into process.env before initializing providers
+const envPath = path.join(process.cwd(), ".env");
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, "utf-8");
+  for (const line of envContent.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const [key, ...valueParts] = trimmed.split("=");
+    if (key) {
+      process.env[key] = valueParts.join("=");
+    }
+  }
+}
+
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { deepseek } from "./deepseek-provider.mts";
