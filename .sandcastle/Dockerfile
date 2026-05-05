@@ -20,8 +20,15 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # --user 1000:1000 (Docker) map to the correct home directory owner.
 RUN usermod -d /home/agent -m -l agent node
 
-# Install Codex CLI (run as root before USER agent)
-RUN npm install -g @openai/codex
+# Install Deepseek CLI (lightweight, Gemini CLI fork)
+RUN npm install -g @sluisr/deepseek-cli
+
+# Copy .env so agents have access to API keys
+COPY .env /home/agent/.env
+
+# Copy entrypoint script
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 USER agent
 
@@ -30,4 +37,4 @@ WORKDIR /home/agent
 # In worktree sandbox mode, Sandcastle bind-mounts the git worktree at /home/agent/workspace
 # and overrides the working directory to /home/agent/workspace at container start.
 # Structure your Dockerfile so that /home/agent/workspace can serve as the project root.
-ENTRYPOINT ["sleep", "infinity"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
