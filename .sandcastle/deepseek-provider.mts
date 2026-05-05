@@ -2,7 +2,7 @@ import type { AgentProvider } from "@ai-hero/sandcastle";
 
 declare const process: any;
 
-export function deepseek(model = "deepseek-v3"): AgentProvider {
+export function deepseek(model = "deepseek-v4-flash"): AgentProvider {
   const env: Record<string, string> = {};
   if (typeof process !== 'undefined' && process.env) {
     const apiKey = process.env.DEEPSEEK_API_KEY;
