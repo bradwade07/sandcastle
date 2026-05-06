@@ -56,10 +56,8 @@ const hooks = {
   sandbox: { onSandboxReady: [{ command: "npm install" }] },
 };
 
-// Copy node_modules from the host into the worktree before each sandbox
-// starts. Avoids a full npm install from scratch; the hook above handles
-// platform-specific binaries and any packages added since the last copy.
-const copyToWorktree = ["node_modules"];
+// Note: copyToWorktree disabled on Windows due to 'cp' command unavailability in Docker.
+// npm install hook above handles fresh dependencies on each run.
 
 // ---------------------------------------------------------------------------
 // Main loop
@@ -79,7 +77,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // -------------------------------------------------------------------------
   const plan = await sandcastle.run({
     hooks,
-    sandbox: docker(),
+    sandbox: docker({ imageName: "sandcastle:latest" }),
     name: "planner",
     // One iteration is enough: the planner just needs to read and reason,
     // not write code.
@@ -129,9 +127,8 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     issues.map(async (issue) => {
       const sandbox = await sandcastle.createSandbox({
         branch: issue.branch,
-        sandbox: docker(),
+        sandbox: docker({ imageName: "sandcastle:latest" }),
         hooks,
-        copyToWorktree,
       });
 
       try {
@@ -221,7 +218,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // -------------------------------------------------------------------------
   await sandcastle.run({
     hooks,
-    sandbox: docker(),
+    sandbox: docker({ imageName: "sandcastle:latest" }),
     name: "merger",
     maxIterations: 1,
     agent: deepseek("deepseek-v4-flash"),
